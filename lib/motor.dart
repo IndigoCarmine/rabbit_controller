@@ -1,18 +1,16 @@
 import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
-
-import 'mock_usbcan.dart';
+import 'package:usbcan_plugins/usbcan.dart';
 
 enum MotorMode { stop, current, position, homing }
 
 class Motor {
-  final int canId;
+  final int canBaseId;
   final String discription;
 
   final MotorMode mode;
 
-  const Motor(this.canId, this.discription, {this.mode = MotorMode.stop});
+  const Motor(this.canBaseId, this.discription, {this.mode = MotorMode.stop});
 }
 
 class MotorButton extends StatelessWidget {
@@ -46,8 +44,8 @@ class MotorButtonBar extends StatefulWidget {
       required this.canStream,
       required this.motors,
       required this.canSend});
-  final Stream<CanFrame> canStream;
-  final void Function(int id, List<int> data) canSend;
+  final Stream<CANFrame> canStream;
+  final void Function(CANFrame) canSend;
   final List<Motor> motors;
 
   @override
@@ -61,8 +59,8 @@ class _MotorButtonBarState extends State<MotorButtonBar> {
     buttons = widget.motors
         .map((motor) => MotorButton(
             canSend: () {
-              widget.canSend(
-                  motor.canId + 1,
+              widget.canSend(CANFrame.fromIdAndData(
+                  motor.canBaseId + 1,
                   Uint8List.fromList([
                     switch (motor.mode) {
                       MotorMode.stop => 0x00,
@@ -70,7 +68,7 @@ class _MotorButtonBarState extends State<MotorButtonBar> {
                       MotorMode.position => 0x02,
                       MotorMode.homing => 0x03,
                     }
-                  ]));
+                  ])));
             },
             motor: motor,
             mode: motor.mode))
@@ -80,6 +78,7 @@ class _MotorButtonBarState extends State<MotorButtonBar> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: buttons);
+    return Row(
+        children: buttons, mainAxisAlignment: MainAxisAlignment.spaceEvenly);
   }
 }

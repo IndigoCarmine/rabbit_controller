@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:rabbit_controller/ControllerPage.dart';
+import 'package:rabbit_controller/controller_page.dart';
 import 'package:usbcan_plugins/usbcan.dart';
 
 void main() {
@@ -17,27 +17,19 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Material App',
       home: DefaultTabController(
-        length: 3,
+        length: 1,
         child: Scaffold(
           appBar: AppBar(
             title: const Text('Material App Bar'),
             bottom: const TabBar(
               tabs: [
-                Tab(icon: Icon(Icons.directions_car)),
-                Tab(icon: Icon(Icons.directions_transit)),
-                Tab(icon: Icon(Icons.directions_bike)),
+                Tab(icon: Icon(Icons.contact_phone)),
               ],
             ),
           ),
           body: TabBarView(
             children: [
-              Container(
-                color: Colors.red,
-              ),
               const MainPage(),
-              Container(
-                color: Colors.blue,
-              ),
             ],
           ),
         ),
