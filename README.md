@@ -1,6 +1,6 @@
 # rabbit_controller
 
-A new Flutter project.
+This is a controller for "Usagi" robot. 
 
 ## Getting Started
 
