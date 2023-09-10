@@ -41,6 +41,7 @@ class _ControllerPageState extends State<ControllerPage> {
 
   @override
   void initState() {
+    super.initState();
     //freezed display rotation to portrait.
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
@@ -65,8 +66,6 @@ class _ControllerPageState extends State<ControllerPage> {
       widget.usbCan.sendFrame(CANFrame.fromIdAndData(
           motors[3].canBaseId, _toUint8List(-x - y - r)));
     });
-
-    super.initState();
   }
 
   Uint8List _toUint8List(double value) {
@@ -93,12 +92,14 @@ class _ControllerPageState extends State<ControllerPage> {
       children: [
         const Spacer(),
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Joystick(listener: (detail) {
               carriageMove = Point(detail.x, detail.y);
             }),
+            const Spacer(),
             Joystick(listener: (detail) {}, mode: JoystickMode.vertical),
+            const Spacer(),
             Joystick(
               listener: (detail) {
                 carriageRotate = detail.x;
