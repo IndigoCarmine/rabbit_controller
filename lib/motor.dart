@@ -2,15 +2,24 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:usbcan_plugins/usbcan.dart';
 
-enum MotorMode { stop, pwm, current, position, homing }
+enum MotorMode {
+  stop,
+  pwm,
+  current,
+  position,
+  interlockPosition,
+  interlockWaiting,
+}
 
 class Motor {
   final int canBaseId;
   final String discription;
+  final int interlockGroupId;
 
   final MotorMode mode;
 
-  const Motor(this.canBaseId, this.discription, {this.mode = MotorMode.stop});
+  const Motor(this.canBaseId, this.discription,
+      {this.interlockGroupId = 0, this.mode = MotorMode.stop});
 }
 
 class MotorButton extends StatelessWidget {
@@ -32,7 +41,8 @@ class MotorButton extends StatelessWidget {
           MotorMode.pwm => Colors.grey,
           MotorMode.current => Colors.blue,
           MotorMode.position => Colors.green,
-          MotorMode.homing => Colors.yellow,
+          MotorMode.interlockPosition => Colors.yellow,
+          MotorMode.interlockWaiting => Colors.orange,
         }),
         onPressed: () {
           canSend(CANFrame.fromIdAndData(
@@ -43,7 +53,8 @@ class MotorButton extends StatelessWidget {
                   MotorMode.pwm => 0x01,
                   MotorMode.current => 0x02,
                   MotorMode.position => 0x03,
-                  MotorMode.homing => 0x04,
+                  MotorMode.interlockPosition => 0x04,
+                  MotorMode.interlockWaiting => 0x05,
                 }
               ])));
         },
@@ -79,7 +90,8 @@ class _MotorButtonBarState extends State<MotorButtonBar> {
             0x01 => MotorMode.pwm,
             0x02 => MotorMode.current,
             0x03 => MotorMode.position,
-            0x04 => MotorMode.homing,
+            0x04 => MotorMode.interlockPosition,
+            0x05 => MotorMode.interlockWaiting,
             _ => modes[i],
           };
         }
@@ -93,15 +105,27 @@ class _MotorButtonBarState extends State<MotorButtonBar> {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: ListView.builder(
-        itemBuilder: (context, index) {
-          return MotorButton(
-              canSend: widget.canSend,
-              motor: widget.motors[index],
-              mode: modes[index]);
-        },
-        itemCount: widget.motors.length,
-        scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              itemBuilder: (context, index) {
+                return MotorButton(
+                    canSend: widget.canSend,
+                    motor: widget.motors[index],
+                    mode: modes[index]);
+              },
+              itemCount: widget.motors.length,
+              scrollDirection: Axis.horizontal,
+            ),
+          ),
+          TextButton(
+              onPressed: () {
+                widget.canSend(
+                    CANFrame.fromIdAndData(0x0, Uint8List.fromList([0x0])));
+              },
+              child: const Text("All Stop"))
+        ],
       ),
     );
   }

@@ -24,21 +24,27 @@ class _ControllerPageState extends State<ControllerPage> {
   Timer? carriageTimer;
   Timer? liftTimer;
   Point<double> carriageMove = const Point(0, 0);
+  Point<double> liftMove = const Point(0, 0);
   double carriageRotate = 0;
   double lastLifeHeight = 0;
 
   final List<Motor> motors = const [
-    Motor(0x0 << 1, "Front Left", mode: MotorMode.current),
-    Motor(0x01 << 1, "Front Right", mode: MotorMode.current),
-    Motor(0x02 << 1, "Rear Left", mode: MotorMode.current),
-    Motor(0x03 << 1, "Rear Right", mode: MotorMode.current),
-    Motor(0x04 << 1, "Lift 1", mode: MotorMode.position),
-    Motor(0x05 << 1, "Lift 2", mode: MotorMode.position),
+    Motor(0x01 << 2, "Front Left", mode: MotorMode.position),
+    Motor(0x02 << 2, "Front Right", mode: MotorMode.position),
+    Motor(0x3F << 2, "Rear Left", mode: MotorMode.position),
+    Motor(0x04 << 2, "Rear Right", mode: MotorMode.position),
+    Motor(0x05 << 2, "Lift 1",
+        mode: MotorMode.interlockPosition, interlockGroupId: 1),
+    Motor(0x06 << 2, "Lift 2",
+        mode: MotorMode.interlockPosition, interlockGroupId: 1),
   ];
+  List<double> motorPositions = List.filled(6, 0);
 
-  final double carriageSpeedScale = 0.5;
-  final double carriageRotateScale = 0.5;
+  final double carriageSpeedScale = 5000;
+  final double carriageRotateScale = 5000;
 
+  int HomingState = 0;
+  late StreamSubscription<CANFrame> canSub;
   @override
   void initState() {
     super.initState();
@@ -48,24 +54,43 @@ class _ControllerPageState extends State<ControllerPage> {
       DeviceOrientation.landscapeRight,
     ]);
 
-    carriageTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {
+    canSub = widget.usbCan.stream.listen((event) {
+      print(event.canId.toString());
+      if (event.canId == 0x01) {
+        HomingState++;
+      }
+    });
+
+    carriageTimer = Timer.periodic(const Duration(milliseconds: 10), (timer) {
+      if (carriageMove.x == 0 && carriageMove.y == 0 && carriageRotate == 0) {
+        return;
+      }
       //mecanum wheel calculation
       var x = carriageMove.x * carriageSpeedScale;
       var y = carriageMove.y * carriageSpeedScale;
       var r = carriageRotate * carriageRotateScale;
+      // print("$motorPositions[2]");
       //Front Left
-      widget.usbCan.sendFrame(
-          CANFrame.fromIdAndData(motors[0].canBaseId, _toUint8List(x + y + r)));
+      motorPositions[0] += x - y + r;
+      widget.usbCan.sendFrame(CANFrame.fromIdAndData(
+          motors[0].canBaseId, _toUint8List(motorPositions[0])));
       //Front Right
+      motorPositions[1] += x + y + r;
       widget.usbCan.sendFrame(CANFrame.fromIdAndData(
-          motors[1].canBaseId, _toUint8List(-x + y - r)));
+          motors[1].canBaseId, _toUint8List(motorPositions[1])));
       //Rear Left
-      widget.usbCan.sendFrame(
-          CANFrame.fromIdAndData(motors[2].canBaseId, _toUint8List(x - y + r)));
-      //Rear Right
+      motorPositions[2] += x + y - r;
       widget.usbCan.sendFrame(CANFrame.fromIdAndData(
-          motors[3].canBaseId, _toUint8List(-x - y - r)));
+          motors[2].canBaseId, _toUint8List(motorPositions[2])));
+      //Rear Right
+      motorPositions[3] += x - y - r;
+      widget.usbCan.sendFrame(CANFrame.fromIdAndData(
+          motors[3].canBaseId, _toUint8List(motorPositions[3])));
+
+      carriageMove = const Point(0, 0);
+      carriageRotate = 0;
     });
+    // liftTimer = Timer.periodic(const Duration(milliseconds: 100), (timer) {});
   }
 
   Uint8List _toUint8List(double value) {
@@ -98,7 +123,7 @@ class _ControllerPageState extends State<ControllerPage> {
               carriageMove = Point(detail.x, detail.y);
             }),
             const Spacer(),
-            Joystick(listener: (detail) {}, mode: JoystickMode.vertical),
+            Joystick(listener: (detail) {}),
             const Spacer(),
             Joystick(
               listener: (detail) {
@@ -109,6 +134,44 @@ class _ControllerPageState extends State<ControllerPage> {
           ],
         ),
         const Spacer(),
+        Row(
+          children: [
+            TextButton(
+                onPressed: () {
+                  motorPositions = List.filled(6, 0);
+                  HomingState = 0;
+                  setState(() {});
+                },
+                child: const Text("Reset")),
+            TextButton(
+                onPressed: () async {
+                  if (HomingState != 0) {
+                    return;
+                  }
+                  double height = 1000000;
+                  HomingState = 1;
+                  while (HomingState == 1) {
+                    await Future.delayed(const Duration(milliseconds: 100));
+                    widget.usbCan.sendFrame(CANFrame.fromIdAndData(
+                        motors[4].canBaseId, _toUint8List(height)));
+                    widget.usbCan.sendFrame(CANFrame.fromIdAndData(
+                        motors[5].canBaseId, _toUint8List(height)));
+                  }
+                  double width = 1000000;
+
+                  while (HomingState == 2) {
+                    await Future.delayed(const Duration(milliseconds: 100));
+                    widget.usbCan.sendFrame(CANFrame.fromIdAndData(
+                        motors[4].canBaseId, _toUint8List(width)));
+                    widget.usbCan.sendFrame(CANFrame.fromIdAndData(
+                        motors[5].canBaseId, _toUint8List(width)));
+                  }
+                  HomingState = 0;
+                  print("Homing Done");
+                },
+                child: const Text("Homing")),
+          ],
+        ),
         MotorButtonBar(
             canStream: widget.usbCan.stream,
             motors: motors,
