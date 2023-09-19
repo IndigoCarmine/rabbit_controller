@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:usbcan_plugins/usbcan.dart';
@@ -9,17 +10,49 @@ enum MotorMode {
   position,
   interlockPosition,
   interlockWaiting,
+  interlockStop,
 }
 
 class Motor {
   final int canBaseId;
   final String discription;
   final int interlockGroupId;
+  // true = same direction motor and encoder, false = opposite
+  final bool direction;
 
   final MotorMode mode;
 
   const Motor(this.canBaseId, this.discription,
-      {this.interlockGroupId = 0, this.mode = MotorMode.stop});
+      {this.interlockGroupId = 0,
+      this.mode = MotorMode.stop,
+      this.direction = true});
+
+  void motorActivate(UsbCan usbCan) {
+    usbCan.sendFrame(CANFrame.fromIdAndData(
+        canBaseId + 1,
+        Uint8List.fromList([
+          switch (mode) {
+            MotorMode.stop => 0x00,
+            MotorMode.pwm => 0x01,
+            MotorMode.current => 0x02,
+            MotorMode.position => 0x03,
+            MotorMode.interlockPosition => 0x04,
+            MotorMode.interlockWaiting => 0x05,
+            MotorMode.interlockStop => 0x06,
+          }
+        ])));
+    if (mode == MotorMode.interlockPosition) {
+      usbCan.sendFrame(CANFrame.fromIdAndData(
+          canBaseId + 2, Uint8List.fromList([8, interlockGroupId])));
+      if (!direction) {
+        usbCan.sendFrame(CANFrame.fromIdAndData(
+            canBaseId + 2, Uint8List.fromList([9, 0x01])));
+      } else {
+        usbCan.sendFrame(CANFrame.fromIdAndData(
+            canBaseId + 2, Uint8List.fromList([9, 0x00])));
+      }
+    }
+  }
 }
 
 class MotorButton extends StatelessWidget {
@@ -43,6 +76,7 @@ class MotorButton extends StatelessWidget {
           MotorMode.position => Colors.green,
           MotorMode.interlockPosition => Colors.yellow,
           MotorMode.interlockWaiting => Colors.orange,
+          MotorMode.interlockStop => Colors.red,
         }),
         onPressed: () {
           canSend(CANFrame.fromIdAndData(
@@ -55,8 +89,20 @@ class MotorButton extends StatelessWidget {
                   MotorMode.position => 0x03,
                   MotorMode.interlockPosition => 0x04,
                   MotorMode.interlockWaiting => 0x05,
+                  MotorMode.interlockStop => 0x06,
                 }
               ])));
+          if (motor.mode == MotorMode.interlockPosition) {
+            canSend(CANFrame.fromIdAndData(motor.canBaseId + 2,
+                Uint8List.fromList([8, motor.interlockGroupId])));
+          }
+          if (motor.direction) {
+            canSend(CANFrame.fromIdAndData(
+                motor.canBaseId + 2, Uint8List.fromList([9, 0x01])));
+          } else {
+            canSend(CANFrame.fromIdAndData(
+                motor.canBaseId + 2, Uint8List.fromList([9, 0x00])));
+          }
         },
         child: Text(motor.discription));
   }
@@ -78,11 +124,12 @@ class MotorButtonBar extends StatefulWidget {
 
 class _MotorButtonBarState extends State<MotorButtonBar> {
   late List<MotorMode> modes;
+  late StreamSubscription<CANFrame> canSub;
   @override
   void initState() {
     super.initState();
     modes = List.filled(widget.motors.length, MotorMode.stop);
-    widget.canStream.listen((frame) {
+    canSub = widget.canStream.listen((frame) {
       for (var i = 0; i < widget.motors.length; i++) {
         if (frame.canId == widget.motors[i].canBaseId + 2) {
           modes[i] = switch (frame.data[0]) {
@@ -92,13 +139,13 @@ class _MotorButtonBarState extends State<MotorButtonBar> {
             0x03 => MotorMode.position,
             0x04 => MotorMode.interlockPosition,
             0x05 => MotorMode.interlockWaiting,
+            0x06 => MotorMode.interlockStop,
             _ => modes[i],
           };
         }
       }
-      if (mounted) {
-        setState(() {});
-      }
+
+      setState(() {});
     });
   }
 
@@ -128,5 +175,11 @@ class _MotorButtonBarState extends State<MotorButtonBar> {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    canSub.cancel();
+    super.dispose();
   }
 }

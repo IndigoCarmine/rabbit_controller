@@ -27,9 +27,9 @@ class MyApp extends StatelessWidget {
               ],
             ),
           ),
-          body: TabBarView(
+          body: const TabBarView(
             children: [
-              const MainPage(),
+              MainPage(),
             ],
           ),
         ),
